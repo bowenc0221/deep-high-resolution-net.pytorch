@@ -108,7 +108,7 @@ def main():
     dump_input = torch.rand(
         (1, 3, cfg.MODEL.IMAGE_SIZE[1], cfg.MODEL.IMAGE_SIZE[0])
     )
-    writer_dict['writer'].add_graph(model, (dump_input, ))
+    # writer_dict['writer'].add_graph(model, (dump_input, ))
 
     logger.info(get_model_summary(model, dump_input))
 
@@ -180,24 +180,27 @@ def main():
     )
 
     for epoch in range(begin_epoch, cfg.TRAIN.END_EPOCH):
-        lr_scheduler.step()
-
         # train for one epoch
         train(cfg, train_loader, model, criterion, optimizer, epoch,
               final_output_dir, tb_log_dir, writer_dict)
 
+        # In PyTorch 1.1.0 and later, you should call `lr_scheduler.step()` after `optimizer.step()`.
+        lr_scheduler.step()
 
-        # evaluate on validation set
-        perf_indicator = validate(
-            cfg, valid_loader, valid_dataset, model, criterion,
-            final_output_dir, tb_log_dir, writer_dict
-        )
+        # Due to unknown bug in CrowdPose evaluation API, we do not evaluate every epoch.
+        # # evaluate on validation set
+        # perf_indicator = validate(
+        #     cfg, valid_loader, valid_dataset, model, criterion,
+        #     final_output_dir, tb_log_dir, writer_dict
+        # )
 
-        if perf_indicator >= best_perf:
-            best_perf = perf_indicator
-            best_model = True
-        else:
-            best_model = False
+        # if perf_indicator >= best_perf:
+        #     best_perf = perf_indicator
+        #     best_model = True
+        # else:
+        #     best_model = False
+
+        best_model = True
 
         logger.info('=> saving checkpoint to {}'.format(final_output_dir))
         save_checkpoint({
@@ -205,9 +208,15 @@ def main():
             'model': cfg.MODEL.NAME,
             'state_dict': model.state_dict(),
             'best_state_dict': model.module.state_dict(),
-            'perf': perf_indicator,
+            # 'perf': perf_indicator,
             'optimizer': optimizer.state_dict(),
         }, best_model, final_output_dir)
+
+    # evaluate on validation set
+    perf_indicator = validate(
+        cfg, valid_loader, valid_dataset, model, criterion,
+        final_output_dir, tb_log_dir, writer_dict
+    )
 
     final_model_state_file = os.path.join(
         final_output_dir, 'final_state.pth'
